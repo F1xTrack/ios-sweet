@@ -52,6 +52,7 @@
 - **BLOCKER for image build: WSL kernel has NO hfsplus module** (`mount -t hfsplus` fails: "unknown filesystem type"). mkiosroot.sh requires kernel HFS+ mount. Fix in progress: cloning microsoft/WSL2-Linux-Kernel (linux-msft-wsl-6.18.33.2), will build `fs/hfsplus.ko` against the running kernel's /proc/config.gz (CONFIG_LOCALVERSION=-microsoft-standard-WSL2) with CONFIG_HFSPLUS_FS=m, then insmod.
 - Boot pipeline ready & verified: kernel.development.sweet (16M, from CI run 43639230789 w/ patch 0082), shim/out/sweet.adt, shim/out/payload.bin (cmdline cpus=8 ... sweetusb=2), shim/out/shim-boot.img (17.2M, ramdisk==payload verified).
 - Build scripts staged in G:\sweet_ios_work\: build_iosroot.sh (mkiosroot), plus tools in WSL (apfs-fuse, hfsprogs 540.1, mkbootimg, img2simg, rsync).
+- HFS+ fix status: git clone of WSL2-Linux-Kernel hung on the network; switched to downloading the release tarball `linux-msft-wsl-6.18.33.2.tar.gz` (github codeload) -> extract -> build `fs/hfsplus.ko` against /proc/config.gz (CONFIG_LOCALVERSION=-microsoft-standard-WSL2) with CONFIG_HFSPLUS_FS=m -> insmod (verified: CONFIG_MODULE_SIG off, lockdown off => unsigned module will load). WSL has 7.7G RAM / 12 cores, plenty. fallback if module load fails: VMWARE-style issue -> try `modprobe` after `make modules_install`; last resort userspace HFS+ writer (heavy). Script: G:\sweet_ios_work\build_hfsmod.sh; WSL prereqs (libelf, flex, bison, bc, gcc, make, dwarves) installed.
 
 ---
 
