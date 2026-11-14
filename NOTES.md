@@ -31,6 +31,19 @@
 
 **REMAINING for a flash:** (1) get kernel artifact from CI, (2) extract d22ap.adt + /product from IPSW (needs `ipsw` tool or manual), (3) mkadt > mkpayload > shim/build.sh, (4) mkiosroot.sh from IPSW dmgs, (5) img2simg, (6) fastboot flash userdata + boot shim. User approved erasing userdata. Partition backups done.
 
+### >>> UPDATE 2026-11-15 (boot pipeline BUILT) <<<
+
+**KERNEL BUILT: patch 0082 fixed the iig/IORPC break.** macos-latest on F1xTrack ships Xcode 26.0.1 whose iig emits `IORPC.kernelContent`; added `xnu/patches/0082-sweet-iig-iorpc-kernelcontent.patch` (adds `IORPCMessage *kernelContent;` to `struct IORPC` in iokit/IOKit/IORPC.h, verified against xnu-8796.141.3). CI run 43639230789 = SUCCESS. Kernel (`xnu/out/kernel.development.sweet`, 16MB development build, all 8 cores per 0078) downloaded.
+
+**Boot pipeline complete (all built & verified in WSL):**
+- `research/ipsw-x/d22ap.adt` extracted from IPSW (adt.py unwrap -> lzfse, then raw ADT; /product node present).
+- ADT: `shim/out/sweet.adt` via `tools/mkadt.py shim/out/sweet.adt --highmem` (no /product warning).
+- Payload: `shim/out/payload.bin` via `tools/mkpayload.py` with cmdline `debug=0xc serial=3 cpus=8 keepsyms=1 -enable_kprintf_spam -noprogress rd=ufsroot0 unentitled_ios_sim_launch=1 ignition_level=1 wdt_test=no_user_checkin ufsrw=1 rootrw=1 launchd_unsecure_cache=1 wdt=-1 sweetfb_noconsole=1 sweetfb_hz=30 sweetusb=2`.
+- **shim-boot.img:** `shim/out/shim-boot.img` (17.2MB) via `shim/build.sh`; verified `unpack_bootv2` ramdisk == payload. Uses `dtb/boot_unpacked/dtb` (from partition backup).
+- **CRLF gotcha:** git on Windows checks out *.sh as CRLF -> `set -euo pipefail` breaks (`pipefail<CR>`). Fixed all .sh + configure with `sed -i 's/\r$//'`, set `git config core.autocrlf false`.
+
+**NEXT (final steps to a flash):** build iOS root image with `tools/mkiosroot.sh OS.dmg SystemOS.dmg AppOS.dmg ios16-root.img 16G` (dmgs currently extracting from IPSW to G:\sweet_ios_work\ipsw\), `img2simg`, then `fastboot -S 512M flash userdata ios16-root.simg` + `fastboot boot shim/out/shim-boot.img`. Then iterate on 0081 USB-network / not-working-list from live logs.
+
 ---
 
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
