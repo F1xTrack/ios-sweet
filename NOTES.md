@@ -19,6 +19,18 @@
 
 **NEXT:** resolve the macOS-Actions blocker (user must provide account with macOS minutes, or log gh into dipa-studio). Then: dispatch xnu.yml on fork, download xnu-kernel artifact, build shim (mkadt+mkpayload+build.sh) in WSL, build iPhone root image (apfs-fuse + mkiosroot.sh) from the IPSW, flash userdata (simg) + fastboot boot shim. After flashing, pick up dev fixes from the 0080/0081 thread (USB internet).
 
+### >>> UPDATE 2026-11-14 (later same day) <<<
+
+**Progress made in this Windows session:**
+- WSL Debian toolchain now COMPLETE: aarch64-linux-gnu-gcc, mkbootimg (osm0sis, -Werror stripped), img2simg/simg2img, hfsprogs 540.1 (Ubuntu jammy deb), apfs-fuse (built from source, lzfse submodule added), rsync, python3. All verified on PATH.
+- Stock DTB extracted: `dtb/boot_unpacked/dtb` (from `backup/boot.img` via unpack_bootv2.py). Shims' DTB dependency satisfied.
+- IPSW iPhone10,3 16.7.16 (20H392) **fully downloaded** to G:\sweet_ios_work\ipsw\ and sha256 verified = ece1194f... (matches Apple).
+- **macOS Actions blocker SOLVED:** the problem was NOT billing but the runner LABEL. On F1xTrack `macos-14` cancels instantly, but `macos-15`/`macos-latest` run fine. Changed fork's xnu.yml: `runs-on: macos-latest`.
+- **Kernel build failed once** because macos-latest now ships **Xcode 26.0.1**, whose iig emits `IORPC.kernelContent`, absent in xnu-8796. **Added patch 0082** (`xnu/patches/0082-sweet-iig-iorpc-kernelcontent.patch`) adding `IORPCMessage *kernelContent;` to `struct IORPC` in iokit/IOKit/IORPC.h (verified `git apply --check` against xnu-8796.141.3). Rebuilt in CI (run 43639230789, in_progress).
+- Build pipeline for shim: `python3 tools/mkadt.py shim/out/sweet.adt --highmem` needs `research/ipsw-x/d22ap.adt` (extract from IPSW: `python3 tools/remotezip.py IPWS_URL DeviceTree.d22ap.im4p ...` + `ipsw img4 im4p extract`). NOT YET done - the workdir needs `research/ipsw-x/d22ap.adt` for the /product node (mkadt warns "missing, no /product node" currently).
+
+**REMAINING for a flash:** (1) get kernel artifact from CI, (2) extract d22ap.adt + /product from IPSW (needs `ipsw` tool or manual), (3) mkadt > mkpayload > shim/build.sh, (4) mkiosroot.sh from IPSW dmgs, (5) img2simg, (6) fastboot flash userdata + boot shim. User approved erasing userdata. Partition backups done.
+
 ---
 
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
