@@ -1,0 +1,17 @@
+name: probe
+on:
+  workflow_dispatch:
+
+jobs:
+  mac13:
+    runs-on: macos-13
+    steps:
+      - run: echo "OK macos-13 $(sw_vers -productVersion)"
+  maclatest:
+    runs-on: macos-latest
+    steps:
+      - run: echo "OK macos-latest $(sw_vers -productVersion)"
+  mac15:
+    runs-on: macos-15
+    steps:
+      - run: echo "OK macos-15 $(sw_vers -productVersion)"
