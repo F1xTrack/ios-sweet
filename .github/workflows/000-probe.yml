@@ -3,7 +3,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  mac14:
-    runs-on: macos-14
+  mac13:
+    runs-on: macos-13
     steps:
-      - run: echo "OK macos-14 $(sw_vers -productVersion) XCODE=$(xcodebuild -version 2>/dev/null | head -1)"
+      - run: echo "macos-13 $(sw_vers -productVersion) XCODE=$(xcodebuild -version 2>/dev/null | head -1)"
+  mac15:
+    runs-on: macos-15
+    steps:
+      - run: echo "macos-15 $(sw_vers -productVersion) XCODE=$(xcodebuild -version 2>/dev/null | head -1)"
+      - run: ls -d /Applications/Xcode*.app 2>/dev/null
