@@ -44,6 +44,15 @@
 
 **NEXT (final steps to a flash):** build iOS root image with `tools/mkiosroot.sh OS.dmg SystemOS.dmg AppOS.dmg ios16-root.img 16G` (dmgs currently extracting from IPSW to G:\sweet_ios_work\ipsw\), `img2simg`, then `fastboot -S 512M flash userdata ios16-root.simg` + `fastboot boot shim/out/shim-boot.img`. Then iterate on 0081 USB-network / not-working-list from live logs.
 
+### >>> UPDATE 2026-11-15 (night autonomous run) <<<
+
+- All 3 dmgs extracted & verified from IPSW: G:\sweet_ios_work\ipsw\ \{087-86698-044 (OS, 4.7G), 087-86593-047 (SystemOS, 2.7G), 087-86715-047 (AppOS, 10M)}.
+- apfs-fuse verified mounting OS.dmg in WSL (FUSE works).
+- Phone currently IN FASTBOOT (I rebooted it from Android via `adb reboot bootloader`); `fastboot getvar unlocked` = **yes**, product sweet. Ready to flash once image is built. NOTE: user said I reboot/flash from Android; user will physically reboot only when stuck inside iOS (no USB reboot possible).
+- **BLOCKER for image build: WSL kernel has NO hfsplus module** (`mount -t hfsplus` fails: "unknown filesystem type"). mkiosroot.sh requires kernel HFS+ mount. Fix in progress: cloning microsoft/WSL2-Linux-Kernel (linux-msft-wsl-6.18.33.2), will build `fs/hfsplus.ko` against the running kernel's /proc/config.gz (CONFIG_LOCALVERSION=-microsoft-standard-WSL2) with CONFIG_HFSPLUS_FS=m, then insmod.
+- Boot pipeline ready & verified: kernel.development.sweet (16M, from CI run 43639230789 w/ patch 0082), shim/out/sweet.adt, shim/out/payload.bin (cmdline cpus=8 ... sweetusb=2), shim/out/shim-boot.img (17.2M, ramdisk==payload verified).
+- Build scripts staged in G:\sweet_ios_work\: build_iosroot.sh (mkiosroot), plus tools in WSL (apfs-fuse, hfsprogs 540.1, mkbootimg, img2simg, rsync).
+
 ---
 
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
