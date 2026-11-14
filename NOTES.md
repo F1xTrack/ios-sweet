@@ -1,5 +1,28 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
+## >>> HANDOFF 2026-11-14 (Windows session; read first) <<<
+
+**Goal:** build the current repo state from scratch on a Windows machine + WSL Debian, flash to the sweet phone (currently on Android 16 custom ROM + Magisk), then continue dev fixes.
+
+**Environment discovered:**
+- Phone: Redmi Note 10 Pro (sweet, M2101K6R), adb serial 558c58c4, Android 16, rooted (Magisk, `su` works). Bootloader is actually unlocked (Magisk present); `ro.boot.*` lock props are spoofed by the ROM (checked: `ro.build.fingerprint`=MIUI V14.0.9.0 global spoof). userdata = /dev/block/sda34, 226 GiB.
+- This is a **Windows** machine (NOT the old Linux dev box: no /home, no /run/media/dipa/android). Old NOTES paths / artifats are on another machine, not here.
+- WSL2 Debian exists but was EMPTY. gh logged in as **F1xTrack** (not dipa-studio) - this is the key access limitation.
+- Repo cloned locally at G:\_Projects\sweet_ios (origin=dipa-studio/ios-sweet). Patches present through **0081** (last: sweet-usb-link-state). Remote `fork` added = F1xTrack/ios-sweet.
+
+**Done so far:**
+- Partition backup (root + `adb exec-out dd`): G:\_Projects\sweet_ios\backup\{boot,dtbo,vbmeta,fsc,fsg,modemst1,modemst2,persist,persistbak}.img
+- F1xTrack/ios-sweet fork created, synced to main.
+- IPSW iPhone10,3 16.7.16 (20H392) 6.17GB downloading (resumable curl) to G:\sweet_ios_work\ipsw\ (sha256 ece1194f7e233e9109c5790a8d23a4564a10a254e15ec5b09978a343265568fb). URL: updates.cdn-apple.com/2025FallFCS/fullrestores/122-77006/1158E502-D76D-4226-AA06-ED5E30CD1111/iPhone10,3,iPhone10,6_16.7.16_20H392_Restore.ipsw
+- WSL toolchain install script at G:\sweet_ios_work\wsl_setup.sh (aarch64 gcc, android-sdk-libsparse-utils, build hfsprogs from source; apfs-fuse still TODO).
+- CI probe: fork has working Actions (ubuntu success) but **macOS-14 runner is CANCELLED instantly on F1xTrack** (probable billing/minute restriction). XNU kernel builds ONLY on macOS runners -> **BLOCKER: need a GitHub account with working macOS Actions**, or dipa-studio/ios-sweet write access.
+
+**NEXT:** resolve the macOS-Actions blocker (user must provide account with macOS minutes, or log gh into dipa-studio). Then: dispatch xnu.yml on fork, download xnu-kernel artifact, build shim (mkadt+mkpayload+build.sh) in WSL, build iPhone root image (apfs-fuse + mkiosroot.sh) from the IPSW, flash userdata (simg) + fastboot boot shim. After flashing, pick up dev fixes from the 0080/0081 thread (USB internet).
+
+---
+
+# iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
+
 ## Agent handoff / active work (2026-10-15, latest)
 
 ### >>> UPDATE 2026-10-18 (read first, then the 10-17 handoff below) <<<
