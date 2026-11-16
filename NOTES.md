@@ -1,5 +1,36 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
+## >>> GPU ACCELERATION: READY SOLUTION FOUND (2026-11-17) <<<
+
+**The GPU problem was never "write an Adreno driver from scratch" -- the ecosystem already solved it.** We only need to PORT it to sweet's SoC (SM7150 / Adreno 618). Hard evidence found on GitHub (2026-11-17):
+
+- **HakiOS** (`github.com/oosexgang/hakios-xnu-kernel`, xnu-8796.121.2 = SAME kernel family as sweet's iOS 16) runs the **window server through Metal on the Adreno**, measured: page swipes 100-115 fps, Settings scroll ~118, at 1125x2436. Architecture (proven, documented in `docs/reference/metal.md`):
+  - **HakiosGPU** kernel driver (`drivers/gpu/hakios.adreno.c` 3852 lines + `hakios.gpu.cpp` 1326 lines): registers an IOService `HakiosGPU`, wakes the Adreno step-by-step (16+ steps: GDSC power -> GPUCC clocks -> GMU firmware -> SMMU -> CP ring), serves requests via an IOKit user client. Requests are Linux msm DRM request numbers; two own (0x7d userptr, 0x7e IOSurface-buffer).
+  - **hakios-metal** (`hakios-metal/`): Metal command model on the Adreno, AIR->NIR->ir3 shader compile via Mesa inside the process, emits the Adreno's own PM4 packets through HakiosGPU.
+  - **HakiosMetalCA.m** (`userland/src/`): makes QuartzCore/CoreAnimation's window server draw through Metal (boot `metal=1`, `METAL_PLUGIN=ca`; needs `default.metallib` via `tools/ca-metallib.py`).
+  - Third path (default, non-Metal): CoreAnimation's OpenGL ES renderer through Mesa's freedreno (`gpu=1`, image played with `GL=1`).
+  - Sibling: **metal2vulkan** (UniXNU AdrenoMetal frontend + Turnip + metal2vulkan, boot `metal_m2v=1`).
+- **UniXNU-sweet** (`github.com/CrackerCat/UniXNU-sweet`) = port for the **EXACT same SoC** (sweet / SM7150 / **Adreno 618**), documents the **A618 legacy GMU HFI transport** (`AdrenoFirmware` override, `drivers/flwwaria` + `kits/AdrenoFirmware`). Bring-up in progress, NOT booting userland yet -- but its A618-specific GMU/clock/firmware knowledge is the missing sweet-side piece.
+- Other siblings: `NWylynko/ios-flame` (Pixel4 SM8150/Adreno640), `akshaynexus/iOSPlus10` (OnePlus10 SM8450), `joranv1/ios-sailfish` (Pixel1, no Metal -> GLES on GPU).
+- **Our repo + F1xTrack fork: NO GPU code exists** (git ls-tree + all-branch log confirm; only the 3 framebuffer/iomfb patches 0003/0010/0046 we already have).
+
+**Sweet hardware map (from DTB `dtb/boot_unpacked/dtb`):**
+- GPU: `qcom,kgsl-3d0@5000000` chipid `0x6010800` = Adreno 618; reg 0x5000000 0x40000; IRQ 0x12c.
+- GMU: `qcom,gmu@506a000` (reg 0x506a000 0x31000, pdc_cfg 0xb290000, pdc_seq 0xb490000; IRQ 0x130/0x131) -- A618 uses **legacy GMU HFI** (per UniXNU-sweet).
+- GPUCC: `qcom,gpucc@5090000 0x9000` (gdsc: gpu_cx_gdsc@509106c, gpu_gx_gdsc@509100c, gpu_cx_hw_ctrl@5091540, gpu_gx_domain_addr@5091508, gpu_gx_sw_reset@5091008).
+- SMMU: `arm,smmu-kgsl@5040000` (qcom,smmu-v2, 3-level tables; IRQ 0xe5).
+- TZ zap: `qcom,kgsl-hyp` pas-id 0x0D, firmware `a615_zap`; GPU mem region 0x97715000. GMU firmware `a618_gmu.bin` (confirm vs a660_gmu.bin hakios uses).
+- Lineage sweet kernel (kgsl for a618) cloned locally: `/opt/gpu-ref/sweet-kernel/drivers/gpu/msm` (adreno_a6xx_gmu.c = authoritative A618 GMU/HFI/clock init for our SoC). HakiOS cloned: `/opt/gpu-ref/hakios`.
+
+**PORT PLAN (Track: real GPU/Metal via ready solution, not from scratch):**
+1. Port **HakiosGPU** kernel driver (`hakios.adreno.c` + `hakios.gpu.cpp`) into sweet's XNU patch set, replacing SC7280/642L register bases & GMU transport with sweet's SM7150/A618 values (from our DTB + Lineage `adreno_a6xx_gmu.c` + UniXNU-sweet A618 legacy HFI). Firmware needed: `a618_gmu.bin`, `a615_zap` (pull from our phone's vendor partition).
+2. Add **hakios-metal** (Metal plugin) + **HakiosMetalCA.m** into userland image; wire `metal=1` boot-arg + `default.metallib` (from an iPhone's QuartzCore or a Mac's).
+3. Fallback early milestone: **CoreAnimation GLES-through-freedreno** (`gpu=1`, Mesa), which hakios uses by default for GUI -- likely *far* easier than Metal first.
+4. Validate: hakios `vk_test`/`m2v_test` style program-first, then window server. Reuse hakios `tools/frames.py`, `metal-run.sh`, `ca-metallib.py` ideas.
+5. IMPORTANT: hakios boots from RAM + own loader + xnu-8796.121.2; sweet uses shim/ABL loader + xnu-8796 - PLATFORM DIVERGES but GPU driver+plugin are portable pieces. Assess loader/userland image differences (hakios: APFS root.apfs/system.apfs; sweet: 16G HFS+ ios16-root image).
+
+**KEY ARCHITECTURE TRUTH (confirmed):** iOS/Metal does NOT talk to Adreno natively; the portability comes from hakios having already built the Metal<->Adreno glue (io) and Mesa compiler path. Our job is adapting which register block + GMU transport + firmware. This is the correct, low-blank-slate path.
+
 ## >>> HANDOFF 2026-11-14 (Windows session; read first) <<<
 
 **Goal:** build the current repo state from scratch on a Windows machine + WSL Debian, flash to the sweet phone (currently on Android 16 custom ROM + Magisk), then continue dev fixes.
