@@ -42,6 +42,13 @@
 - **CI build path for the kernel side**: our `.github/workflows/xnu.yml` applies `xnu/patches/*.patch` + `*.sh` onto darwin-xnu-build (blacktop, xnu-8796, MACHINE_CONFIG=SWEET) and builds on macos-latest. hakios.patch (3504 lines, from hakios/xnu/) is the full vanilla-xnu-8796 diff - extract `bsd/dev/hakios.adreno.c` + `iokit/Kernel/hakios.gpu.cpp` + their bsd/conf/files + iokit/conf/files lines + MiniIOSurface.h + sys/hakios.input.h into a NEW sweet patch 0083 (adapted for a618 regs), then CI-build. NOTE: our sweet XNU already has 0082 iig patch + many sweet-specific changes; hakios.patch also contains overlapping edits (bsd/conf, iokit/KernelConfigTables, pmap) that we do NOT want - port ONLY the GPU files + their minimal conf glue.
 - **Needs from phone: pull vendor firmware now** (non-destructive, recovery `adb shell ls /vendor/firmware` then dd the 3 GPU fw files) so the driver has something to load. Record exact sizes/md5 in NOTES when pulled.
 
+### ✅ GPU FIRMWARE PULLED from phone's vendor (2026-11-17) — done
+Phone is **dynamic-partition (Android 11 super, sda25)** target: vendor/system are logical partitions (by-name/vendor -> dm-1, system -> dm-0). In OrangeFox recovery the super/dm stack is NOT auto-activated; found vendor at `/dev/block/dm-1` as **erofs** (magic `e2 e1 f5 e0 1a` at offset 1024). Mounted with `mount -t erofs /dev/block/dm-1 /vendor`. Firmware found at `/vendor/firmware/` and pulled to **`G:\sweet_ios_work\gpu-fw\`**:
+- `a618_gmu.bin` 32768 B, md5 `9E23C52057BB573DEE9BA31F1FDBA4FA` (header `80 3F 04 00 ...` raw ARM)
+- `a630_sqe.fw` 32136 B, md5 `D172AAC301B0DDFF4A75A9100BC41DFA`
+- `a615_zap.mdt` 6860 B, md5 `44B6223F45D210440B84AA6F1232E817` (**valid ELF** 7f45 4c46 - the TZ zap shader) + `.b00` (148, `3CF41F9F...`), `.b01` (6712, `839B4A2E...`), `.b02` (1984, `890F8BD5...`), `.elf` (14272, `5DA50381...`)
+All md5-stable and valid. These 3 blobs feed the a618 bring-up: GMU fw (a618_gmu.bin), shader-engine microcode (a630_sqe.fw), TZ zap (a615_zap.* via TrustZone QSEECOM).
+
 ## >>> HANDOFF 2026-11-14 (Windows session; read first) <<<
 
 **Goal:** build the current repo state from scratch on a Windows machine + WSL Debian, flash to the sweet phone (currently on Android 16 custom ROM + Magisk), then continue dev fixes.
