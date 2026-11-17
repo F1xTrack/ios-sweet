@@ -1,0 +1,131 @@
+diff --git a/bsd/conf/files.arm64 b/bsd/conf/files.arm64
+index a77bd10..31337e8 100644
+--- a/bsd/conf/files.arm64
++++ b/bsd/conf/files.arm64
+@@ -23,3 +23,6 @@ bsd/dev/arm64/disassembler.c	optional config_dtrace
+ bsd/dev/arm64/sdt_arm.c		optional config_dtrace
+ 
+ bsd/kern/bsd_stubs.c		standard
++
++# SWEET (adreno a618 bring-up)
++bsd/dev/sweet_adreno.c		standard
+diff --git a/bsd/dev/sweet_adreno.c b/bsd/dev/sweet_adreno.c
+new file mode 100755
+index 0000000..efa92c3
+--- /dev/null
++++ b/bsd/dev/sweet_adreno.c
+@@ -0,0 +1,101 @@
++/*
++ * sweet_adreno.c - SWEET Adreno 618 bring-up gate on Redmi Note 10 Pro (SM7150).
++ *
++ * Self-contained, compile-safe register probe. Modeled on HakiOS's hakios.adreno.c step
++ * bring-up but trimmed to only the cheapest, verifiable gate: does the a618 GPU wake under
++ * Qualcomm's hypervisor (power/clocks/GMU/SMMU registers accessible)? No scheduler clocks,
++ * no timing helpers, no firmware execution yet - just register reads/writes that print to
++ * the console ring (sweet-log-pull.sh).
++ *
++ * Boot-args:
++ *   adreno=N    run steps 1..N then stop. 1=clocks 2=fuses(qfprom) 3=gpucc 4=cx-gdsc
++ *               5=cx/cxo clocks 6=GMU regs 8=SMMU ids 13=smmu ctx 16=legacy-HFI note
++ *               20=kgsl-3d0 first-power.
++ *   adreno_pause=MS  sleep between steps (default 1000) via a dumb busy-spin (no clock API).
++ *   adreno_skip=MASK skip steps with those bits (bit N = step N).
++ *
++ * Addresses from sweet DTB; register word-offsets from Lineage drivers/gpu/msm (SM7150/a618):
++ *   kgsl-3d0@5000000 (chipid 0x6010800), gmu@506a000, gpucc@5090000,
++ *   gpu_cx_gdsc@509106c, gpu_gx_gdsc@509100c, hw_ctrl@5091540, domain@5091508, reset@5091008,
++ *   smmu-kgsl@5040000, qfprom@780000.
++ */
++#include <kern/clock.h>
++#include <libkern/libkern.h>
++#include <mach/vm_param.h>
++#include <pexpert/pexpert.h>
++#include <vm/vm_kern.h>
++
++extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
++
++#define SWEET_LOG(fmt, ...)  IOLog("sweetlog adreno: " fmt "\n", ##__VA_ARGS__)
++
++#define KGSL3D_BASE  0x5000000u
++#define GMU_BASE     0x506a000u
++#define GPUCC_BASE   0x5090000u
++#define SMMU_BASE    0x5040000u
++#define QFPROM_BASE  0x780000u
++
++/* GPUCC byte offsets (a618) */
++#define GPUCC_CX_GDSCR 0x106cu
++#define GPUCC_GX_GDSCR 0x100cu
++#define GPUCC_CX_GMU_CBCR 0x1098u
++#define GPUCC_CXO_CBCR  0x109cu
++
++static vm_offset_t gpucc_v, gmu_v, kgsl_v, smmu_v, qfprom_v;
++static uint32_t last_step, skip_steps, pause_ms = 1000, step;
++static uint32_t read32(vm_offset_t base, uint32_t byteoff) { return *(volatile uint32_t *)(base + byteoff); }
++static void write32(vm_offset_t base, uint32_t byteoff, uint32_t v) { *(volatile uint32_t *)(base + byteoff) = v; __asm__ volatile("dsb sy" ::: "memory"); }
++static void spin_ms(unsigned ms) { volatile uint32_t i, j; for (j=0;j<ms;j++) for (i=0;i<500000u;i++) {} }
++static void announce(const char *what) { SWEET_LOG("step %u: %s", step, what); spin_ms(pause_ms); }
++
++static void s1(void){ announce("step1 clocks gcc@0x100000"); read32(0x100000,0); SWEET_LOG("step 1 ok"); }
++static void s2(void){ announce("step2 fuses qfprom"); read32(qfprom_v,0); SWEET_LOG("step 2 ok"); }
++static void s3(void){ announce("step3 gpucc state"); read32(gpucc_v,GPUCC_CX_GDSCR); read32(gpucc_v,GPUCC_GX_GDSCR); SWEET_LOG("step 3 ok"); }
++static void s4(void){ announce("step4 cx-gdsc on"); write32(gpucc_v,GPUCC_CX_GDSCR,0x1); SWEET_LOG("step 4 ok"); }
++static void s5(void){ announce("step5 cx/cxo clocks"); write32(gpucc_v,GPUCC_CX_GMU_CBCR,0x1); write32(gpucc_v,GPUCC_CXO_CBCR,0x1); SWEET_LOG("step 5 ok"); }
++static void s6(void){ announce("step6 gmu regs"); read32(gmu_v,0); SWEET_LOG("step 6 ok"); }
++static void s8(void){ announce("step8 smmu ids"); read32(smmu_v,0); read32(smmu_v,0x2000); SWEET_LOG("step 8 ok"); }
++static void s13(void){ announce("step13 smmu ctxprobe"); read32(smmu_v,0x10000); SWEET_LOG("step 13 ok"); }
++static void s16(void){ announce("step16 legacy-HFI note"); SWEET_LOG("step 16: a618 legacy HFI present (wire later)"); }
++static void s20(void){ announce("step20 kgsl-3d0 first power"); read32(kgsl_v,0); SWEET_LOG("step 20 ok"); }
++
++void sweet_adreno_bringup(void)
++{
++    uint32_t quiet = 0;
++    step = 1;
++    PE_parse_boot_argn("adreno", &step, sizeof(step));
++    PE_parse_boot_argn("adreno_pause", &pause_ms, sizeof(pause_ms));
++    PE_parse_boot_argn("adreno_skip", &skip_steps, sizeof(skip_steps));
++    if (step < 1) step = 1;
++    if (step > 20) step = 20;
++    last_step = step;
++    (void)quiet;
++
++    gpucc_v = ml_io_map(GPUCC_BASE, 0x1000);
++    gmu_v   = ml_io_map(GMU_BASE, 0x4000);
++    kgsl_v  = ml_io_map(KGSL3D_BASE, 0x4000);
++    smmu_v  = ml_io_map(SMMU_BASE, 0x20000);
++    qfprom_v= ml_io_map(QFPROM_BASE, 0x8000);
++    if (!gpucc_v || !gmu_v || !kgsl_v || !smmu_v || !qfprom_v) {
++        SWEET_LOG("io_map failed; abort bringup");
++        return;
++    }
++    SWEET_LOG("bringup start: adreno=%u", last_step);
++    for (step = 1; step <= last_step; step++) {
++        if (skip_steps & (1u << step)) continue;
++        switch (step) {
++            case 1:  s1(); break;
++            case 2:  s2(); break;
++            case 3:  s3(); break;
++            case 4:  s4(); break;
++            case 5:  s5(); break;
++            case 6:  s6(); break;
++            case 8:  s8(); break;
++            case 13: s13(); break;
++            case 16: s16(); break;
++            case 20: s20(); break;
++            default: SWEET_LOG("step %u: reserved", step); break;
++        }
++    }
++    SWEET_LOG("bringup done (adreno=%u)", last_step);
++}
+diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
+index 4df41ba..56441b7 100644
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -1046,6 +1046,8 @@ bsd_init(void)
+ 	machine_timeout_bsd_init();
+ #endif /* DEVELOPMENT || DEBUG */
+ 
++	extern void sweet_adreno_bringup(void);
++	sweet_adreno_bringup();
+ 	bsd_init_kprintf("done\n");
+ }
+ 
