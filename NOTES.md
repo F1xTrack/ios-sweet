@@ -49,6 +49,12 @@ Phone is **dynamic-partition (Android 11 super, sda25)** target: vendor/system a
 - `a615_zap.mdt` 6860 B, md5 `44B6223F45D210440B84AA6F1232E817` (**valid ELF** 7f45 4c46 - the TZ zap shader) + `.b00` (148, `3CF41F9F...`), `.b01` (6712, `839B4A2E...`), `.b02` (1984, `890F8BD5...`), `.elf` (14272, `5DA50381...`)
 All md5-stable and valid. These 3 blobs feed the a618 bring-up: GMU fw (a618_gmu.bin), shader-engine microcode (a630_sqe.fw), TZ zap (a615_zap.* via TrustZone QSEECOM).
 
+### ✅ PORT WORK STARTED (2026-11-17): reference vendored + a618 legacy-GMU confirmed
+- Vendored HakiOS driver + support files to `research/hakios-gpu/` (gitignored, local ref): `hakios.adreno.c` (167KB), `hakios.gpu.cpp` (47KB), `MiniIOSurface.{h,cpp}`, `hakios.input.h`, `conf`. + `PORT.md` = SC7280->SM7150 address translation map + overview. HakiOS repo cloned `/opt/gpu-ref/hakios`; Lineage sweet kernel (kgsl) cloned `/opt/gpu-ref/sweet-kernel/drivers/gpu/msm`.
+- **a618 legacy GMU CONFIRMED** (from Lineage `adreno_a6xx_gmu.c`): a618 uses `_load_legacy_gmu_fw` (raw blob, no per-block headers) + legacy OOB (a630/a615-family), NOT the modern a640-style GMU hakios implements. a618-specific open regs in `a6xx_gmu_init`: PDC_GPU_TCS1/TCS3_CMD0 → addr/data 0x30080/0x30090/0x30010 (a618: 0x30090+`0x2` data at TCS3 CMD0 offset 2), PDC_GPU_SEQ_START_ADDR=0, PDC_GPU_ENABLE_PDC, then GMU_SYS_BUS_CONFIG/ICACHE/DCACHE_CONFIG=1, PWR_COL_INTER_FRAME_CTRL, RPMH_CTRL/HYST, GPU_NAP_CTRL, PWR_COL_HYST 0x000A1680. Chipid 0x6010800.
+- Git: research/ is gitignored so the vendored port source stays local; NOTHING new committed under xnu/patches yet. Next: author patch 0083 (adreno bring-up harness first for on-phone a618 calibration, then HakiosGPU user client + Metal/GLES glue per user's "full port in one patch" choice), build via F1xTrack CI (`gh`), then flash+boot `adreno=N` step calibration.
+- Phone currently in recovery (safe, manageable). Firmware in `G:\sweet_ios_work\gpu-fw\` (md5 in NOTES below).
+
 ## >>> HANDOFF 2026-11-14 (Windows session; read first) <<<
 
 **Goal:** build the current repo state from scratch on a Windows machine + WSL Debian, flash to the sweet phone (currently on Android 16 custom ROM + Magisk), then continue dev fixes.
