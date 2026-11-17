@@ -11,10 +11,10 @@ index a77bd10..31337e8 100644
 +bsd/dev/sweet_adreno.c		standard
 diff --git a/bsd/dev/sweet_adreno.c b/bsd/dev/sweet_adreno.c
 new file mode 100755
-index 0000000..efa92c3
+index 0000000..df3d48d
 --- /dev/null
 +++ b/bsd/dev/sweet_adreno.c
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,105 @@
 +/*
 + * sweet_adreno.c - SWEET Adreno 618 bring-up gate on Redmi Note 10 Pro (SM7150).
 + *
@@ -38,13 +38,19 @@ index 0000000..efa92c3
 + */
 +#include <kern/clock.h>
 +#include <libkern/libkern.h>
++#include <mach/mach_types.h>
 +#include <mach/vm_param.h>
 +#include <pexpert/pexpert.h>
++#include <stdint.h>
 +#include <vm/vm_kern.h>
 +
 +extern vm_offset_t ml_io_map(vm_offset_t phys_addr, vm_size_t size);
++extern void sweet_adreno_bringup(void);   /* called from bsd_init(); silences -Wmissing-prototypes */
 +
-+#define SWEET_LOG(fmt, ...)  IOLog("sweetlog adreno: " fmt "\n", ##__VA_ARGS__)
++/* kprintf() is the BSD/kernel-safe console logger (declared in pexpert/pexpert/pexpert.h,
++ * which we include); IOLog is an IOKit/libkern C++ call not visible from a plain-C bsd
++ * file. Output lands in the console ring for sweet-log-pull.sh. */
++#define SWEET_LOG(fmt, ...)  kprintf("sweetlog adreno: " fmt "\n", ##__VA_ARGS__)
 +
 +#define KGSL3D_BASE  0x5000000u
 +#define GMU_BASE     0x506a000u
@@ -78,7 +84,6 @@ index 0000000..efa92c3
 +
 +void sweet_adreno_bringup(void)
 +{
-+    uint32_t quiet = 0;
 +    step = 1;
 +    PE_parse_boot_argn("adreno", &step, sizeof(step));
 +    PE_parse_boot_argn("adreno_pause", &pause_ms, sizeof(pause_ms));
@@ -86,7 +91,6 @@ index 0000000..efa92c3
 +    if (step < 1) step = 1;
 +    if (step > 20) step = 20;
 +    last_step = step;
-+    (void)quiet;
 +
 +    gpucc_v = ml_io_map(GPUCC_BASE, 0x1000);
 +    gmu_v   = ml_io_map(GMU_BASE, 0x4000);
