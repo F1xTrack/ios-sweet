@@ -55,6 +55,15 @@ All md5-stable and valid. These 3 blobs feed the a618 bring-up: GMU fw (a618_gmu
 - Git: research/ is gitignored so the vendored port source stays local; NOTHING new committed under xnu/patches yet. Next: author patch 0083 (adreno bring-up harness first for on-phone a618 calibration, then HakiosGPU user client + Metal/GLES glue per user's "full port in one patch" choice), build via F1xTrack CI (`gh`), then flash+boot `adreno=N` step calibration.
 - Phone currently in recovery (safe, manageable). Firmware in `G:\sweet_ios_work\gpu-fw\` (md5 in NOTES below).
 
+### ✅ PATCH 0083 DELIVERED + CI DISPATCHED (2026-11-17)
+- **`xnu/patches/0083-sweet-adreno-bringup.patch`** written, committed (`fe17d48`), pushed to F1xTrack fork, CI dispatched: **run 44039442702** (macos-latest, SWEET, DEVELOPMENT). Adds:
+  - `bsd/dev/sweet_adreno.c` — SELF-CONTAINED a618 bring-up gate (steps 1..20 via boot-arg `adreno=N`; power/cx-gdsc/clocks/GMU regs/SMMU/qfprom reads + writes; prints `sweetlog adreno:` to console ring). Addresses from sweet DTB; word-offsets from Lineage SM7150/a618 (a6xx_gmu.c). Compile-safe (osfmk/pexpert/vm only, `ml_io_map`, `PE_parse_boot_argn`, `IOLog`; no timing helpers, no scheduler deps).
+  - `bsd/conf/files.arm64` line `bsd/dev/sweet_adreno.c standard`
+  - `bsd/kern/bsd_init.c` call `sweet_adreno_bringup()` before `bsd_init_kprintf("done")`.
+- **Validated: `git apply --check` PASSES on pristine xnu-8796.141.3** (cloned `/opt/dxb-test/xnusrc`; blacktop dxb build would also silently-skip a bad patch, so this pre-validation was essential).
+- Firmware wait: bring-up steps 1..8/13 are register-only, no fw needed. Steps 16/20 (GMU HFI, CP start) report presence only. fw execution deferred to next patch once gate proves the core wakes.
+- NEXT: watch run 44039442702. If build green -> fetch kernel artifact, package shim-boot.img with 0083 kernel, flash+boot `adreno=N` on phone, read `sweetlog adreno:` lines from console ring (recovery sweet-log-pull.sh). This is the on-phone calibration gate: does a618 wake under hypervisor? Memory note: put each step's real addresses from Lineage; unknown bases (bus-iface 0x3d0f000 equiv, GMU ITCM/DTCM offsets, RSCC) still marked for on-phone determination via adreno=N.
+
 ## >>> HANDOFF 2026-11-14 (Windows session; read first) <<<
 
 **Goal:** build the current repo state from scratch on a Windows machine + WSL Debian, flash to the sweet phone (currently on Android 16 custom ROM + Magisk), then continue dev fixes.
