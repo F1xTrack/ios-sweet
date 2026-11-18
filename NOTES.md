@@ -63,6 +63,11 @@ All md5-stable and valid. These 3 blobs feed the a618 bring-up: GMU fw (a618_gmu
 - Firmware wait: bring-up steps 1..8/13 are register-only, no fw needed. Steps 16/20 (GMU HFI, CP start) report presence only. fw execution deferred to next patch once gate proves the core wakes.
 - NEXT: watch run 44055829034 (the post-fix build, head 001eff6).
 
+### 🔬 GPU BOOT #2 (0084, s1 fixed): panicked again -> FASTBOOT, ring EMPTY (2026-11-18)
+- Booted `shim-boot-0084-a618.img` (adreno=20, s1 reads gcc_v). Phone auto-rebooted to fastboot again => **panic** (s1 raw-address bug is gone, so this is a real step pointing at a GPU address OR another early crash).
+- Pulled userdata ring via recovery: **0 sweetlog matches, no kernel banner** -> confirms the ring is useless for this bring-up: `sweet_adreno_bringup()` runs at `bsd_init()` BEFORE the UFS sweet_log thread is up (flush ~1/s), so console output of the probe never persists before a panic. **Lesson: rely ONLY on the on-screen panic dump (user pastes it) + symbolization, not the ring.**
+- Need: reboot GPU image again and capture the on-screen panic dump (pc, far, backtrace) for symbolization, exactly like boot #1.
+
 ### 🔬 GPU BOOT #1: PANIC ANALYZED = MY s1 BUG, NOT HYPERVISOR (2026-11-18)
 - Booted `shim-boot-0083-a618.img` (adreno=20) via `fastboot boot`. Kernel panicked; phone auto-rebooted to fastboot.
 - **Panic symbolized from the on-screen dump** (kernel.had keepsyms): pc `0xfffffe0007931d24` = **`_sweet_adreno_bringup + 0x4b0`** (backtrace `_bsd_init` -> `_sleh_synchronous`). NOT the misleading "handshake structure not initialized" string (that's the panic debugger).
