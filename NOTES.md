@@ -1,5 +1,18 @@
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
+## 📡 LIVE SCREEN-READ SETUP (2026-11-18, session)
+- Goal: I read the sweet phone's screen (panic dump / iOS) without the user dictating text.
+- Stream server on PC: `C:\sweet_ios_work\stream\server.py` (Flask). Dual ports:
+  - **HTTPS 8443** = browser pages: `/control` (PC: live frame + remote focus/exposure sliders), `/capture` (3rd phone: getUserMedia -> /ingest), `/panel`, `/health`, `/snapshot`.
+  - **HTTP 8080** = `/ingest` from the native caster app (no TLS). Same Flask app, two werkzeug servers.
+  - Self-signed cert `cert.pem`/`key.pem` (served https). Uses `qwen3.8-27b` via ImmersFree for transcription.
+- Qwen transcription: `C:\sweet_ios_work\stream\transcribe.py shot.jpg [prompt]` — reads tokens from `C:\Users\f1xtrack\AppData\Local\hermes\auth.json` (pool `custom:immersfree`, 5 keys), tries in priority order skipping rate-limited. Model `qwen3.8-27b`, base `https://chat.immers.cloud/v1/endpoints/generate/`.
+- Frame capture: `cap.py DIR N IV` (high-freq rolling buffer), `scan.py DIR N` (rank text-like frames, transcribe sharpest).
+- **MAJOR FINDING (boot #1 & #2):** bring-up `sweet_adreno_bringup()` runs at `bsd_init()` — BEFORE the UFS `sweet_log` thread is up (flush ~1/s), so its kprintf NEVER persists to the userdata console ring before a panic. **The console ring is USELESS for this driver; rely on the on-screen panic dump instead.** (boot #2: pull 0 sweetlog, no banner.)
+- **Slider/camera reality:** browser camera frames are blurry/overexposed on the panic screen (panic shows ~1s before auto-reboot). Need a sharp capture to read hex. Manual focus/exposure via third phone camera unreliable; pivot to native screen-cast was attempted.
+- **Caster app** `C:\sweet_ios_work\caster\`: builds APK without gradle (aapt2 link + javac + d8 + zipalign + apksigner, JDK21, build-tools 36.1.0, platform android-34). `build.cmd` — NOTE d8.bat must be called with `call` (else it exits the parent batch). MediaProjection screen-cast; needs **foreground service** (Android 14) — WIP, not yet working (process gets killed; no frames arrived).
+- **Devices right now:** 3rd phone (SM_G988B Galaxy S20 Ultra) switched to Wireless ADB `192.168.50.182:5555` (also USB `R5CN509EEQX`), IP `192.168.50.182`. USB freed for the 2nd phone (sweet, usual serial `558c58c4`). Sweet phone last seen: fastboot (after 0084 GPU boot panic/reboot).
+
 ## >>> GPU ACCELERATION: READY SOLUTION FOUND (2026-11-17) <<<
 
 **The GPU problem was never "write an Adreno driver from scratch" -- the ecosystem already solved it.** We only need to PORT it to sweet's SoC (SM7150 / Adreno 618). Hard evidence found on GitHub (2026-11-17):
