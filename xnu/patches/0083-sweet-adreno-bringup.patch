@@ -11,10 +11,10 @@ index a77bd10..31337e8 100644
 +bsd/dev/sweet_adreno.c		standard
 diff --git a/bsd/dev/sweet_adreno.c b/bsd/dev/sweet_adreno.c
 new file mode 100755
-index 0000000..df3d48d
+index 0000000..74050e2
 --- /dev/null
 +++ b/bsd/dev/sweet_adreno.c
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,106 @@
 +/*
 + * sweet_adreno.c - SWEET Adreno 618 bring-up gate on Redmi Note 10 Pro (SM7150).
 + *
@@ -64,14 +64,14 @@ index 0000000..df3d48d
 +#define GPUCC_CX_GMU_CBCR 0x1098u
 +#define GPUCC_CXO_CBCR  0x109cu
 +
-+static vm_offset_t gpucc_v, gmu_v, kgsl_v, smmu_v, qfprom_v;
++static vm_offset_t gpucc_v, gmu_v, kgsl_v, smmu_v, qfprom_v, gcc_v;
 +static uint32_t last_step, skip_steps, pause_ms = 1000, step;
 +static uint32_t read32(vm_offset_t base, uint32_t byteoff) { return *(volatile uint32_t *)(base + byteoff); }
 +static void write32(vm_offset_t base, uint32_t byteoff, uint32_t v) { *(volatile uint32_t *)(base + byteoff) = v; __asm__ volatile("dsb sy" ::: "memory"); }
 +static void spin_ms(unsigned ms) { volatile uint32_t i, j; for (j=0;j<ms;j++) for (i=0;i<500000u;i++) {} }
 +static void announce(const char *what) { SWEET_LOG("step %u: %s", step, what); spin_ms(pause_ms); }
 +
-+static void s1(void){ announce("step1 clocks gcc@0x100000"); read32(0x100000,0); SWEET_LOG("step 1 ok"); }
++static void s1(void){ announce("step1 clocks gcc@0x100000"); read32(gcc_v,0); SWEET_LOG("step 1 ok"); }
 +static void s2(void){ announce("step2 fuses qfprom"); read32(qfprom_v,0); SWEET_LOG("step 2 ok"); }
 +static void s3(void){ announce("step3 gpucc state"); read32(gpucc_v,GPUCC_CX_GDSCR); read32(gpucc_v,GPUCC_GX_GDSCR); SWEET_LOG("step 3 ok"); }
 +static void s4(void){ announce("step4 cx-gdsc on"); write32(gpucc_v,GPUCC_CX_GDSCR,0x1); SWEET_LOG("step 4 ok"); }
@@ -97,7 +97,8 @@ index 0000000..df3d48d
 +    kgsl_v  = ml_io_map(KGSL3D_BASE, 0x4000);
 +    smmu_v  = ml_io_map(SMMU_BASE, 0x20000);
 +    qfprom_v= ml_io_map(QFPROM_BASE, 0x8000);
-+    if (!gpucc_v || !gmu_v || !kgsl_v || !smmu_v || !qfprom_v) {
++    gcc_v   = ml_io_map(0x100000, 0x1000);
++    if (!gpucc_v || !gmu_v || !kgsl_v || !smmu_v || !qfprom_v || !gcc_v) {
 +        SWEET_LOG("io_map failed; abort bringup");
 +        return;
 +    }

@@ -63,6 +63,15 @@ All md5-stable and valid. These 3 blobs feed the a618 bring-up: GMU fw (a618_gmu
 - Firmware wait: bring-up steps 1..8/13 are register-only, no fw needed. Steps 16/20 (GMU HFI, CP start) report presence only. fw execution deferred to next patch once gate proves the core wakes.
 - NEXT: watch run 44055829034 (the post-fix build, head 001eff6).
 
+### 🔬 GPU BOOT #1: PANIC ANALYZED = MY s1 BUG, NOT HYPERVISOR (2026-11-18)
+- Booted `shim-boot-0083-a618.img` (adreno=20) via `fastboot boot`. Kernel panicked; phone auto-rebooted to fastboot.
+- **Panic symbolized from the on-screen dump** (kernel.had keepsyms): pc `0xfffffe0007931d24` = **`_sweet_adreno_bringup + 0x4b0`** (backtrace `_bsd_init` -> `_sleh_synchronous`). NOT the misleading "handshake structure not initialized" string (that's the panic debugger).
+- Disassembled pc: `mov w8,#0x100000; ldr wzr,[x8]` = **translation fault (ESR 0x96000005, far 0x01000000)**.
+- **Root cause = MY bug in s1():** `read32(0x100000, 0)` dereferenced the raw PHYSICAL 0x100000 as a VA without `ml_io_map`. Panicked before any real GPU step. The `sweetlog adreno:` lines never reached the userdata ring (bringup runs at bsd_init, ring thread not up before the crash; flush ~1/s).
+- **FIX (0083 regenerated, apply-check OK, host-gcc clean):** added `gcc_v = ml_io_map(0x100000, 0x1000)`, s1 now reads `gcc_v`. Now the probe will genuinely test whether the hypervisor stage-2 maps the GPU blocks (next boots: any fault = REAL hypervisor block of that base).
+- Tooling added: `tools/symfind.py` (nearest-symbol from a Mach-O), `tools/disasm.py` (disassemble around a VA), `tools/sweet-log-pull.sh` + manual userdata-ring pull via `dd skip=$((242929872896/4096-1025)) count=1025`.
+- Console-ring lesson: bringup kprintf at bsd_init is too early to persist to the userdata ring before a panic; rely on the on-screen panic dump (kprintf spam on) instead.
+
 ### ✅ 0083 KERNEL BUILT + BOOT IMAGE PACKAGED (2026-11-17 ~13:13)
 - **Run 44055829034 = SUCCESS.** The prior run 44039442702 failed on `IOLog` undefined at the BSD C layer (IOLog is IOKit/libkern C++); fixed in 001eff6: SWEET_LOG macro now uses **`kprintf`** (declared in pexpert/pexpert.h), added `extern void sweet_adreno_bringup(void)` prototype (silences -Wmissing-prototypes under -Weverything), removed unused `quiet`. Patch re-validated: `git apply --check` OK on pristine xnu-8796.141.3 + host-gcc `-fsyntax-only -Wall -Wextra` clean.
 - Kernel artifact: `C:\sweet_ios_work\artifacts-0083\xnu-kernel\kernel.development.sweet` (15.90 MB; **confirmed 15 `sweetlog adreno:` strings present** = bring-up code linked in).
