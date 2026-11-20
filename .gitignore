@@ -8,3 +8,41 @@ shim/out/
 xnu/out/
 xnu/out-*/
 __pycache__/
+
+# --- session/config/local junk that must NOT be committed ---
+# session state + device/network dumps often embed serials, IPs and credentials
+session.*.json
+ios-sweet.*.json
+ios-sweet.json
+ssh-*.json
+opencode.json
+*.json.bak
+drop_ui.py
+repair.py
+--help
+
+# recovery/third-party images and zip bundles
+OrangeFox-x/
+OrangeFox*.zip
+*.zip
+
+# panic/crash dumps and kernel artifacts pulled from the phone
+panic*.log
+*.panic
+fb*.png
+shot*.jpg
+a618*
+sweetlog*
+
+# ad-hoc local helper scripts (diagnostics, one-off)
+tools/build00*.sh
+tools/pull*.ps1
+tools/pull*.sh
+
+# editor/OS cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
